@@ -8,13 +8,13 @@ from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-import database_manager
+from database_manager import DatabaseManager
 from config import BOT_TOKEN, NOTIFICATION_SETTINGS
 
 logger = logging.getLogger(__name__)
 
 class AdminPanel:
-    def __init__(self, db: database_manager.DatabaseManager, bot: Bot):
+    def __init__(self, db: DatabaseManager, bot: Bot):
         self.db = db
         self.bot = bot
         self.admin_chat_id = NOTIFICATION_SETTINGS.get('admin_chat_id')
@@ -345,3 +345,26 @@ class AdminPanel:
                 
         except Exception as e:
             logger.error(f"Ошибка уведомления об отмене сделки: {e}")
+
+def register_admin_handlers(dp, admin_panel):
+    """Регистрация обработчиков админ панели"""
+    
+    @dp.callback_query(F.data.startswith("admin_"))
+    async def handle_admin_callbacks(callback: types.CallbackQuery):
+        """Обработка callback'ов админ панели"""
+        if not admin_panel.is_admin(callback.from_user.id):
+            await callback.answer("❌ Нет прав доступа", show_alert=True)
+            return
+            
+        action = callback.data
+        
+        if action == "admin_stats":
+            await admin_panel.show_statistics(callback.message.chat.id)
+        elif action == "admin_users":
+            await admin_panel.show_users(callback.message.chat.id)
+        elif action == "admin_active_deals":
+            await admin_panel.show_active_deals(callback.message.chat.id)
+        elif action == "admin_all_deals":
+            await admin_panel.show_all_deals(callback.message.chat.id)
+        
+        await callback.answer()

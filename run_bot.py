@@ -18,7 +18,6 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # Импортируем наши модули
-import database_manager
 from config import BOT_TOKEN, validate_config
 from modern_escrow_bot import escrow_bot, dp, bot
 from admin_panel import AdminPanel
