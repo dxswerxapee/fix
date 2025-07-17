@@ -56,8 +56,8 @@ class Database:
             seller_id BIGINT,
             buyer_id BIGINT,
             amount DECIMAL(10,2),
-            deal_conditions TEXT,
-            deal_password VARCHAR(255),
+            `conditions` TEXT,
+            `password` VARCHAR(255),
             status ENUM('waiting_partner', 'waiting_payment', 'payment_sent', 'completed', 'cancelled') DEFAULT 'waiting_partner',
             payment_method VARCHAR(50),
             payment_address VARCHAR(255),
@@ -196,12 +196,12 @@ class Database:
         try:
             if role == 'seller':
                 query = """
-                INSERT INTO deals (seller_id, amount, conditions, password) 
+                INSERT INTO deals (seller_id, amount, `conditions`, `password`) 
                 VALUES (%s, %s, %s, %s)
                 """
             else:  # buyer
                 query = """
-                INSERT INTO deals (buyer_id, amount, conditions, password) 
+                INSERT INTO deals (buyer_id, amount, `conditions`, `password`) 
                 VALUES (%s, %s, %s, %s)
                 """
             
@@ -222,7 +222,7 @@ class Database:
         cursor = self.connection.cursor()
         try:
             # Проверяем пароль и получаем информацию о сделке
-            query = "SELECT seller_id, buyer_id, password FROM deals WHERE id = %s"
+            query = "SELECT seller_id, buyer_id, `password` FROM deals WHERE id = %s"
             cursor.execute(query, (deal_id,))
             result = cursor.fetchone()
             
