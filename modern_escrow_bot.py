@@ -16,7 +16,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-import database_manager
+from database_manager import DatabaseManager
 from config import BOT_TOKEN, MYSQL_CONFIG
 
 # Настройка логирования
@@ -54,7 +54,7 @@ TON_ADDRESS = "UQC337PVpq0748IOjdbQWJlVjDMIdkENC5iimBrexCikKyYo"
 
 class ModernEscrowBot:
     def __init__(self):
-        self.db = database_manager.DatabaseManager()
+        self.db = DatabaseManager()
         
     def generate_captcha_keyboard(self, correct_animal: str) -> InlineKeyboardMarkup:
         """Генерирует клавиатуру капчи с 6 вариантами животных"""
@@ -484,19 +484,35 @@ async def process_join_password(message: types.Message, state: FSMContext):
     else:
         await message.answer("❌ Ошибка присоединения к сделке!")
 
-async def main():
-    """Запуск бота"""
-    logger.info("🚀 Запуск Modern Escrow Bot 2025...")
+@dp.message(Command("admin"))
+async def admin_command(message: types.Message):
+    """Команда для доступа к админ панели"""
+    from config import NOTIFICATION_SETTINGS
+    admin_id = NOTIFICATION_SETTINGS.get('admin_chat_id')
     
-    # Инициализация базы данных
-    await escrow_bot.db.initialize()
-    
-    try:
-        await dp.start_polling(bot)
-    except KeyboardInterrupt:
-        logger.info("🛑 Бот остановлен пользователем")
-    finally:
-        await bot.session.close()
+    if str(message.from_user.id) == str(admin_id):
+        # Отложенный импорт для избежания циклических импортов
+        from admin_panel import AdminPanel
+        admin_panel = AdminPanel(escrow_bot.db, bot)
+        await admin_panel.send_admin_menu(message.chat.id)
+    else:
+        await message.answer("❌ У вас нет прав доступа к административной панели!")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# Инициализация экземпляра бота для использования в других модулей
+escrow_bot = ModernEscrowBot()
+
+def register_handlers():
+    """Регистрация всех обработчиков бота"""
+    # Обработчики уже зарегистрированы через декораторы выше
+    
+    # Регистрируем админ панель
+    from admin_panel import AdminPanel, register_admin_handlers
+    admin_panel = AdminPanel(escrow_bot.db, bot)
+    register_admin_handlers(dp, admin_panel)
+    
+    logger.info("✅ Все обработчики зарегистрированы")
+    
+def setup_bot():
+    """Настройка бота и регистрация обработчиков"""
+    register_handlers()
+    return escrow_bot, dp, bot
