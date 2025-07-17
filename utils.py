@@ -7,8 +7,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 def generate_captcha():
-    """Генерирует случайный 6-значный код капчи"""
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    """Генерирует капчу с выбором животного"""
+    animals = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵']
+    correct_animal = random.choice(animals)
+    
+    # Создаем список из 6 животных, включая правильный
+    options = [correct_animal]
+    while len(options) < 6:
+        animal = random.choice(animals)
+        if animal not in options:
+            options.append(animal)
+    
+    # Перемешиваем варианты
+    random.shuffle(options)
+    
+    return {
+        'correct_animal': correct_animal,
+        'options': options
+    }
 
 def generate_crypto_address(crypto_type):
     """Генерирует криптовалютный адрес (для демонстрации)"""
@@ -54,7 +70,7 @@ def format_deal_status(status):
     }
     return status_map.get(status, status)
 
-def format_role(role, user_id, seller_id, buyer_id):
+def format_role(deal_id, user_id, seller_id, buyer_id):
     """Определяет роль пользователя в сделке"""
     if user_id == seller_id:
         return 'Продавец'
