@@ -42,32 +42,50 @@ class GarantBot:
         if db.is_user_verified(user_id):
             return await self.show_main_menu(update, context)
         
-        # Показываем капчу
-        captcha_code = generate_captcha()
-        db.save_captcha(user_id, captcha_code)
+        # Показываем капчу с выбором животного
+        captcha_data = generate_captcha()
+        db.save_captcha(user_id, captcha_data['correct_animal'])
         
         message = f"""🔐 Проверка безопасности
 
-Для получения доступа к боту введи простую капчу:
-Выберите на клавиатуре: 🔑
+Для получения доступа к боту выберите правильное животное:
+🎯 Выберите: {captcha_data['correct_animal']}
 
-Код: {captcha_code}"""
+Нажмите на правильный вариант ниже:"""
         
-        await update.message.reply_text(message)
+        # Создаем клавиатуру с вариантами животных
+        keyboard = []
+        row = []
+        for i, animal in enumerate(captcha_data['options']):
+            row.append(InlineKeyboardButton(animal, callback_data=f"captcha_{animal}"))
+            if len(row) == 3:  # По 3 кнопки в ряду
+                keyboard.append(row)
+                row = []
+        if row:  # Добавляем оставшиеся кнопки
+            keyboard.append(row)
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(message, reply_markup=reply_markup)
         return CAPTCHA
     
     async def handle_captcha(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик капчи"""
-        user_id = update.effective_user.id
-        captcha_input = update.message.text
+        query = update.callback_query
+        await query.answer()
         
-        if db.verify_captcha(user_id, captcha_input):
+        user_id = update.effective_user.id
+        selected_animal = query.data.split('_')[1]  # Извлекаем выбранное животное из callback_data
+        
+        if db.verify_captcha(user_id, selected_animal):
             db.verify_user(user_id)
+            await query.edit_message_text("✅ Капча пройдена успешно! Добро пожаловать!")
             await self.show_main_menu(update, context)
             return ConversationHandler.END
         else:
-            await update.message.reply_text("❌ Неверный код капчи. Попробуйте еще раз.")
-            return CAPTCHA
+            await query.edit_message_text("❌ Неверный выбор. Попробуйте еще раз.")
+            # Перезапускаем капчу
+            return await self.start(update, context)
     
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает главное меню"""
@@ -128,8 +146,26 @@ class GarantBot:
         password = update.message.text
         deal_id = context.user_data.get('joining_deal_id')
         
+        if not deal_id:
+            await update.message.reply_text("❌ Ошибка: ID сделки не найден.")
+            return ConversationHandler.END
+        
+        deal = db.get_deal(deal_id)
+        if not deal:
+            await update.message.reply_text("❌ Сделка не найдена.")
+            return ConversationHandler.END
+        
+        # Проверяем, что пользователь не пытается присоединиться к своей собственной сделке
+        if deal['seller_id'] == user_id or deal['buyer_id'] == user_id:
+            await update.message.reply_text("❌ Вы не можете присоединиться к своей собственной сделке.")
+            return ConversationHandler.END
+        
+        # Проверяем статус сделки
+        if deal['status'] != 'waiting_partner':
+            await update.message.reply_text("❌ Сделка недоступна для присоединения.")
+            return ConversationHandler.END
+        
         if db.join_deal(deal_id, user_id, password):
-            deal = db.get_deal(deal_id)
             await update.message.reply_text("✅ Партнер успешно присоединился к сделке!\nОжидайте подтверждения оплаты от покупателя.")
             
             # Уведомляем создателя сделки
@@ -145,7 +181,7 @@ class GarantBot:
             
             await self.show_deal_payment_info(update, context, deal_id)
         else:
-            await update.message.reply_text("❌ Неверный пароль или сделка недоступна.")
+            await update.message.reply_text("❌ Неверный пароль.")
         
         return ConversationHandler.END
     
@@ -214,14 +250,14 @@ class GarantBot:
         
         if deal_id:
             commission = float(os.getenv('COMMISSION_RATE', 1.0))
-            total_amount = amount + commission
+            total_amount = float(amount) + commission
             
             role_text = "Продавец" if role == "seller" else "Покупатель"
             
             message = f"""✅ Сделка успешно создана!
 
 🆔 ID сделки: {deal_id}
-💰 Сумма: {amount}$
+💰 Сумма: {amount:.2f}$
 📝 Условия: {conditions}
 👤 Ваша роль: {role_text}
 🔐 Пароль: {password}
@@ -252,11 +288,11 @@ class GarantBot:
             return
         
         commission = float(os.getenv('COMMISSION_RATE', 1.0))
-        total_amount = deal['amount'] + commission
+        total_amount = float(deal['amount']) + commission
         
         message = f"""🟢 Детали оплаты по сделке #{deal_id}!
 
-💵 Сумма: {total_amount}$ (USDT)
+💵 Сумма: {total_amount:.2f}$ (USDT)
 
 📝 Условия: {deal['conditions']}
 
@@ -295,11 +331,11 @@ class GarantBot:
         
         deal = db.get_deal(deal_id)
         commission = float(os.getenv('COMMISSION_RATE', 1.0))
-        total_amount = deal['amount'] + commission
+        total_amount = float(deal['amount']) + commission
         
         message = f"""📦 Сделка #{deal_id}
 
-💰 Сумма: {total_amount}$
+💰 Сумма: {total_amount:.2f}$
 🔗 Сеть: {payment_method}
 🏷 Адрес: {address}
 
@@ -335,7 +371,7 @@ class GarantBot:
             status = format_deal_status(deal['status'])
             
             message += f"""🆔 Сделка #{deal['id']}
-💰 Сумма: {deal['amount']}$
+💰 Сумма: {float(deal['amount']):.2f}$
 👤 Роль: {role}
 📊 Статус: {status}
 📅 Дата: {deal['created_at'].strftime('%d.%m.%Y %H:%M')}
@@ -440,7 +476,9 @@ class GarantBot:
         main_conv_handler = ConversationHandler(
             entry_points=[CommandHandler('start', self.start)],
             states={
-                CAPTCHA: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_captcha)],
+                CAPTCHA: [
+                    CallbackQueryHandler(self.handle_captcha, pattern="^captcha_"),
+                ],
                 WAITING_JOIN_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_join_password)],
             },
             fallbacks=[CommandHandler('cancel', self.cancel)]

@@ -71,7 +71,7 @@ class Database:
         captcha_table = """
         CREATE TABLE IF NOT EXISTS captcha_sessions (
             user_id BIGINT PRIMARY KEY,
-            captcha_code VARCHAR(10),
+            correct_animal VARCHAR(10),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -143,7 +143,7 @@ class Database:
         finally:
             cursor.close()
     
-    def save_captcha(self, user_id, captcha_code):
+    def save_captcha(self, user_id, correct_animal):
         if not self.connection:
             if not self.connect():
                 return False
@@ -151,13 +151,13 @@ class Database:
         cursor = self.connection.cursor()
         try:
             query = """
-            INSERT INTO captcha_sessions (user_id, captcha_code) 
+            INSERT INTO captcha_sessions (user_id, correct_animal) 
             VALUES (%s, %s) 
             ON DUPLICATE KEY UPDATE 
-            captcha_code = VALUES(captcha_code), 
+            correct_animal = VALUES(correct_animal), 
             created_at = CURRENT_TIMESTAMP
             """
-            cursor.execute(query, (user_id, captcha_code))
+            cursor.execute(query, (user_id, correct_animal))
             return True
         except mysql.connector.Error as err:
             logger.error(f"Ошибка сохранения капчи: {err}")
@@ -165,17 +165,17 @@ class Database:
         finally:
             cursor.close()
     
-    def verify_captcha(self, user_id, captcha_code):
+    def verify_captcha(self, user_id, selected_animal):
         if not self.connection:
             if not self.connect():
                 return False
                 
         cursor = self.connection.cursor()
         try:
-            query = "SELECT captcha_code FROM captcha_sessions WHERE user_id = %s"
+            query = "SELECT correct_animal FROM captcha_sessions WHERE user_id = %s"
             cursor.execute(query, (user_id,))
             result = cursor.fetchone()
-            if result and result[0] == captcha_code:
+            if result and result[0] == selected_animal:
                 # Удаляем капчу после успешной проверки
                 delete_query = "DELETE FROM captcha_sessions WHERE user_id = %s"
                 cursor.execute(delete_query, (user_id,))
@@ -222,14 +222,26 @@ class Database:
         cursor = self.connection.cursor()
         try:
             # Проверяем пароль и получаем информацию о сделке
-            query = "SELECT seller_id, buyer_id, password FROM deals WHERE id = %s"
+            query = "SELECT seller_id, buyer_id, password, status FROM deals WHERE id = %s"
             cursor.execute(query, (deal_id,))
             result = cursor.fetchone()
             
-            if not result or result[2] != password:
+            if not result:
                 return False
             
-            seller_id, buyer_id, _ = result
+            seller_id, buyer_id, stored_password, status = result
+            
+            # Проверяем пароль
+            if stored_password != password:
+                return False
+            
+            # Проверяем, что пользователь не пытается присоединиться к своей собственной сделке
+            if seller_id == user_id or buyer_id == user_id:
+                return False
+            
+            # Проверяем статус сделки
+            if status != 'waiting_partner':
+                return False
             
             # Определяем, кто присоединяется
             if seller_id is None:
