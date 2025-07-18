@@ -1,0 +1,21 @@
+{
+  "MusicVolume": 0.5,
+  "PlayMusicOnTerroristWin": true,
+  "PlayMusicOnCounterTerroristWin": true,
+  "PlayMusicOnDraw": true,
+  "MusicDelay": 2.0,
+  "TerroristWinSounds": [
+    "music/terrorist_win_1.mp3",
+    "music/terrorist_win_2.mp3",
+    "music/terrorist_win_3.mp3"
+  ],
+  "CounterTerroristWinSounds": [
+    "music/ct_win_1.mp3",
+    "music/ct_win_2.mp3",
+    "music/ct_win_3.mp3"
+  ],
+  "DrawSounds": [
+    "music/draw_1.mp3",
+    "music/draw_2.mp3"
+  ]
+}
